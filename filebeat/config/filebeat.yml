@@ -1,0 +1,14 @@
+filebeat.inputs:
+  - type: tcp
+    max_message_size: 10MiB
+    host: "0.0.0.0:5100"
+    enabled: true
+
+output.kafka:
+  hosts: ["host.docker.internal:9092"]
+  topic: 'app-logs'
+  required_acks: 1
+  partition.round_robin:
+    reachable_only: false
+  compression: gzip
+  max_message_bytes: 1000000
