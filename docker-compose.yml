@@ -1,0 +1,86 @@
+services:
+  filebeat:
+    image: elastic/filebeat:7.17.28
+    container_name: filebeat
+    ports:
+      - "5100:5100"
+    user: root
+    restart: unless-stopped
+    volumes:
+      - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - filebeat-data:/usr/share/filebeat/data
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - kafka
+    networks:
+      - elk
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,LOCALHOST://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://host.docker.internal:9092,LOCALHOST://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,LOCALHOST:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_BROKER_ID=1
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    restart: unless-stopped
+    networks:
+      - elk
+  elasticsearch:
+    container_name: elasticsearch
+    image: elasticsearch:7.17.28
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    restart: unless-stopped
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      discovery.type: single-node
+      ELASTIC_USERNAME: "elastic"
+      ELASTIC_PASSWORD: "changeme"
+    networks:
+      - elk
+  logstash:
+    container_name: logstash
+    image: logstash:7.17.28
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    restart: unless-stopped
+    volumes:
+      - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    networks:
+      - elk
+  kibana:
+    container_name: kibana
+    image: kibana:7.17.28
+    ports:
+      - "5601:5601"
+    restart: unless-stopped
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml
+    depends_on:
+      - kafka
+      - elasticsearch
+    networks:
+      - elk
+networks:
+  elk:
+    driver: bridge
+volumes:
+  filebeat-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
